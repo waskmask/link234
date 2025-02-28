@@ -7,6 +7,8 @@ const session = require("express-session");
 const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
 const formRoutes = require("./routes/formRoutes");
+// Import User model
+// const User = require("./models/User");
 
 const configurePassport = require("./config/passport");
 const path = require("path");
@@ -49,6 +51,45 @@ app.use("/public", express.static(path.join(__dirname, "public")));
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
+
+// Migration endpoint: Update membership dates for existing users that have memberships but are missing addedOn or expiresOn
+// app.get("/api/migrate/membershipDates", async (req, res) => {
+//   try {
+//     const result = await User.updateMany(
+//       {
+//         $or: [
+//           { "memberships.addedOn": { $exists: false } },
+//           { "memberships.expiresOn": { $exists: false } },
+//         ],
+//       },
+//       [
+//         {
+//           $set: {
+//             "memberships.addedOn": {
+//               $ifNull: ["$memberships.addedOn", "$$NOW"],
+//             },
+//             "memberships.expiresOn": {
+//               $dateAdd: {
+//                 startDate: { $ifNull: ["$memberships.addedOn", "$$NOW"] },
+//                 unit: "day",
+//                 amount: "$memberships.durationDays",
+//               },
+//             },
+//           },
+//         },
+//       ]
+//     );
+//     res.json({ message: "Membership dates updated", result });
+//   } catch (err) {
+//     console.error("Error migrating membership dates:", err);
+//     res
+//       .status(500)
+//       .json({
+//         message: "Error migrating membership dates",
+//         error: err.message,
+//       });
+//   }
+// });
 
 // Form routes
 app.use("/api/form", formRoutes);
