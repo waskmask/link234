@@ -17,7 +17,7 @@ const app = express();
 // Configure CORS
 app.use(
   cors({
-    origin: "http://localhost:5000", // or your frontend domain
+    origin: ["http://localhost:5000", "https://link234.com"],
     credentials: true,
   })
 );
