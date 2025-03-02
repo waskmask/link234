@@ -17,7 +17,7 @@ const app = express();
 // Configure CORS
 app.use(
   cors({
-    origin: "*",
+    origin: ["http://localhost:5000", "https://link234.com"],
     credentials: true,
   })
 );
@@ -51,6 +51,35 @@ app.use("/public", express.static(path.join(__dirname, "public")));
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
+
+// QR download
+// Download API endpoint
+app.get("/api/download", (req, res) => {
+  const { filename } = req.query;
+  if (!filename) {
+    return res.status(400).json({ error: "Missing filename parameter" });
+  }
+
+  // Basic validation to prevent directory traversal attacks
+  if (
+    filename.includes("..") ||
+    filename.includes("/") ||
+    filename.includes("\\")
+  ) {
+    return res.status(400).json({ error: "Invalid filename" });
+  }
+
+  // Construct the full path to the file in the qrcodes folder
+  const filePath = path.join(__dirname, "qrcodes", filename);
+
+  // Use res.download to send the file as an attachment.
+  res.download(filePath, filename, (err) => {
+    if (err) {
+      console.error("Error downloading file:", err);
+      return res.status(500).json({ error: "Error downloading file" });
+    }
+  });
+});
 
 // Migration endpoint: Update membership dates for existing users that have memberships but are missing addedOn or expiresOn
 // app.get("/api/migrate/membershipDates", async (req, res) => {
