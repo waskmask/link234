@@ -17,7 +17,14 @@ const app = express();
 // Configure CORS
 app.use(
   cors({
-    origin: ["http://localhost:5000", "https://link234.com"],
+    origin: (origin, callback) => {
+      const allowedOrigins = ["http://localhost:5000", "https://link234.com"];
+      if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
   })
 );
@@ -43,7 +50,14 @@ app.use(
 app.use(passport.initialize());
 app.use(passport.session());
 
-app.use("/qrcodes", express.static(path.join(__dirname, "qrcodes")));
+app.use(
+  "/qrcodes",
+  express.static(path.join(__dirname, "qrcodes"), {
+    setHeaders: (res, filePath) => {
+      res.set("Access-Control-Allow-Origin", "https://link234.com");
+    },
+  })
+);
 // Serve the 'catalogue' folder as a static directory
 app.use("/catalogues", express.static(path.join(__dirname, "catalogues")));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
