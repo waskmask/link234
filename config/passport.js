@@ -6,17 +6,24 @@ const bcrypt = require("bcryptjs");
 module.exports = (passport) => {
   passport.use(
     new LocalStrategy(
-      { usernameField: "email" },
+      { usernameField: "email", passwordField: "password" },
       async (email, password, done) => {
         try {
-          const user = await User.findOne({ email });
-          if (!user) return done(null, false, { message: "User not found" });
+          const normalized = (email || "").trim().toLowerCase();
 
-          // Compare entered password with stored hashed password
+          // ⬇️ IMPORTANT: select the hash
+          const user = await User.findOne({ email: normalized }).select(
+            "+password"
+          );
+          if (!user) return done(null, false, { message: "User not found" });
+          if (!user.password)
+            return done(null, false, { message: "No password on file" });
+
           const isMatch = await bcrypt.compare(password, user.password);
-          return isMatch
-            ? done(null, user)
-            : done(null, false, { message: "Incorrect password" });
+          if (!isMatch)
+            return done(null, false, { message: "Incorrect password" });
+
+          return done(null, user);
         } catch (error) {
           return done(error);
         }
@@ -24,6 +31,14 @@ module.exports = (passport) => {
     )
   );
 
+  // Only relevant if you’re using sessions
   passport.serializeUser((user, done) => done(null, user.id));
-  passport.deserializeUser((id, done) => User.findById(id, done));
+  passport.deserializeUser(async (id, done) => {
+    try {
+      const u = await User.findById(id).select("-password");
+      done(null, u);
+    } catch (e) {
+      done(e);
+    }
+  });
 };

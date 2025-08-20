@@ -1,6 +1,6 @@
 // controllers/userController.js
 const User = require("../models/User");
-const shortid = require("shortid");
+const nanoid = require("nanoid");
 const fs = require("fs");
 const qr = require("qr-image");
 const path = require("path");
@@ -276,45 +276,71 @@ exports.deleteAccount = async (req, res) => {
 // get routes
 // Controller to get user data by ID
 exports.getUserById = async (req, res) => {
-  try {
-    const userId = req.user.id; // User ID from the middleware
-
-    // Find the user by ID in the database
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: "user_not_found" });
-    }
-
-    // Return user data
-    res.status(200).json({ message: "User data retrieved successfully", user });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+  const user = await User.findById(req.user._id)
+    .select("-password -__v -resetPasswordToken -emailVerificationCode")
+    .lean();
+  return res.json({ user });
 };
 
-// Controller to get user by username from URL
+// PUBLIC (profile): by username
 exports.getUserByUsername = async (req, res) => {
-  try {
-    const { username } = req.params; // Extract username from the URL
+  const { username } = req.params;
 
-    // Find the user by username
-    const user = await User.findOne({ username });
-    if (!user) {
-      return res.status(404).json({ message: "user_not_found" });
-    }
+  const user = await User.findOne({ username })
+    .select("-password -__v -resetPasswordToken -emailVerificationCode")
+    .lean();
 
-    // Remove sensitive fields (e.g., password) before sending the response
-    const { password, ...safeUserData } = user.toObject();
+  if (!user) return res.status(404).json({ message: "user_not_found" });
 
-    res.status(200).json({
-      message: "User data retrieved successfully",
-      user: safeUserData,
-    });
-  } catch (error) {
-    console.error("Error retrieving user by username:", error.message);
-    res.status(500).json({ error: "Failed to retrieve user data" });
+  // Hide fields based on your visibility flags (add more flags if you have them)
+  if (user.emailVisibility === false) delete user.email;
+  if (user.phoneVisibility === false) delete user.phone;
+  if (user.addressVisibility === false) delete user.address;
+
+  // Only return public items for arrays that support visibility
+  const isPublic = (x) => x && x.isPublic !== false;
+  const bySort = (a, b) => (a?.sort ?? 0) - (b?.sort ?? 0);
+
+  user.products = (user.products || []).filter(isPublic).sort(bySort);
+  user.releases = (user.releases || []).filter(isPublic).sort(bySort);
+  user.additionalLinks = (user.additionalLinks || [])
+    .filter(isPublic)
+    .sort(bySort);
+
+  // Depending on your naming, this could be 'catalogue' or 'catalogues'
+  // Keep whichever you actually have in the schema:
+  if (Array.isArray(user.catalogue)) {
+    user.catalogue = user.catalogue.filter(isPublic).sort(bySort);
   }
+  if (Array.isArray(user.catalogues)) {
+    user.catalogues = user.catalogues.filter(isPublic).sort(bySort);
+  }
+
+  return res.json({ user });
 };
+// Controller to get user by username from URL
+// exports.getUserByUsername = async (req, res) => {
+//   try {
+//     const { username } = req.params; // Extract username from the URL
+
+//     // Find the user by username
+//     const user = await User.findOne({ username });
+//     if (!user) {
+//       return res.status(404).json({ message: "user_not_found" });
+//     }
+
+//     // Remove sensitive fields (e.g., password) before sending the response
+//     const { password, ...safeUserData } = user.toObject();
+
+//     res.status(200).json({
+//       message: "User data retrieved successfully",
+//       user: safeUserData,
+//     });
+//   } catch (error) {
+//     console.error("Error retrieving user by username:", error.message);
+//     res.status(500).json({ error: "Failed to retrieve user data" });
+//   }
+// };
 
 exports.removeAddress = async (req, res) => {
   try {
@@ -337,4 +363,15 @@ exports.removeAddress = async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+};
+
+// Toggle email visibility
+exports.setEmailVisibility = async (req, res) => {
+  const { visible } = req.body;
+  const user = await User.findByIdAndUpdate(
+    req.user._id,
+    { $set: { emailVisibility: !!visible } },
+    { new: true, select: "email emailVisibility" }
+  );
+  res.json({ email: user.email, emailVisibility: user.emailVisibility });
 };

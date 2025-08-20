@@ -1,27 +1,29 @@
+// API: middleware/authMiddleware.js
 const jwt = require("jsonwebtoken");
+const User = require("../models/User"); // adjust path if needed
 
-module.exports = (req, res, next) => {
-  // First try to extract token from cookies
-  let token = req.cookies && req.cookies.token;
-
-  // If not found in cookies, try the Authorization header as a fallback
-  if (!token && req.headers.authorization) {
-    token = req.headers.authorization.split(" ")[1];
-  }
-
-  if (!token) {
-    return res.status(401).json({ message: "Unauthorized: No token provided" });
-  }
-
+module.exports = async (req, res, next) => {
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log("Decoded User:", decoded); // Debug: check if decoding works
-    req.user = decoded; // Attach decoded payload to request object
-    console.log("Received token:", token);
+    let token = null;
 
-    console.log("Decoded User:", decoded);
-    next();
-  } catch (error) {
-    return res.status(401).json({ message: "Unauthorized: Invalid token" });
+    // Prefer Bearer
+    const auth = req.headers.authorization;
+    if (auth?.startsWith("Bearer ")) token = auth.slice(7);
+
+    // Fallback: cookie
+    if (!token && req.cookies?.token) token = req.cookies.token;
+
+    if (!token) return res.status(401).json({ message: "No token provided" });
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Load a fresh user doc (safer than just decoded payload)
+    const user = await User.findById(decoded.id).select("-password");
+    if (!user) return res.status(403).json({ message: "Unauthorized" });
+
+    req.user = user;
+    return next();
+  } catch (err) {
+    return res.status(401).json({ message: "Token invalid or expired" });
   }
 };

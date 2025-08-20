@@ -1,14 +1,14 @@
 // controllers/authController.js
 const User = require("../models/User");
 const nodemailer = require("nodemailer");
-const shortid = require("shortid");
+const { customAlphabet, nanoid } = require("nanoid");
 const generateToken = require("../utils/jwt");
 const passport = require("passport");
 const jwt = require("jsonwebtoken");
 const fs = require("fs");
 const qr = require("qr-image");
 const path = require("path");
-
+const usernameId = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 12);
 // Email verification handler
 exports.verifyEmail = async (req, res) => {
   try {
@@ -43,8 +43,8 @@ exports.signup = async (req, res) => {
     const user = new User({
       email,
       password,
-      username: shortid.generate().toLowerCase(),
-      referralCode: shortid.generate(),
+      username: usernameId(),
+      referralCode: nanoid(12),
       socialLinks: {
         facebook: "",
         instagram: "",
@@ -149,6 +149,15 @@ exports.signup = async (req, res) => {
 };
 
 // Login
+// helper so login + logout use the same flags
+const cookieOpts = () => ({
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  path: "/", // important: use same path for clearCookie
+  maxAge: 24 * 60 * 60 * 1000,
+});
+
 exports.login = (req, res, next) => {
   passport.authenticate(
     "local",
@@ -159,19 +168,10 @@ exports.login = (req, res, next) => {
           .status(400)
           .json({ message: info ? info.message : "Login failed" });
       }
-
-      // Generate token after authentication
       const token = generateToken(user);
-
-      res.cookie("token", token, {
-        httpOnly: false,
-        secure: process.env.NODE_ENV === "production" ? true : false, // only secure in production
-        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", // use lax in development
-        maxAge: 864000000,
-      });
-
-      // Return the token as well (if needed)
-      res.json({ token });
+      res.cookie("token", token, cookieOpts());
+      // Optional: you can omit sending the token in JSON if your frontend doesn’t need it
+      return res.json({ success: true });
     }
   )(req, res, next);
 };
@@ -391,5 +391,17 @@ exports.changeEmailAddress = async (req, res) => {
   } catch (error) {
     console.error("Error changing email address:", error.message);
     res.status(500).json({ error: error.message });
+  }
+};
+
+// logout
+exports.logout = async (req, res) => {
+  try {
+    // destroy session if you use express-session (safe even if unused)
+    req.session?.destroy?.(() => {});
+    res.clearCookie("token", { ...cookieOpts(), maxAge: 0 }); // same flags!
+    return res.json({ success: true });
+  } catch (e) {
+    return res.status(200).json({ success: true }); // fail-safe
   }
 };

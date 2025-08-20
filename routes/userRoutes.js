@@ -58,6 +58,13 @@ router.put(
   linksController.addOrUpdateAdditionalLinks
 );
 
+// privacy
+router.put(
+  "/email-visibility",
+  authMiddleware,
+  userController.setEmailVisibility
+);
+
 // Delete specific social links
 router.delete(
   "/delete-social-links",
