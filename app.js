@@ -21,13 +21,30 @@ const geoRoutes = require("./routes/geoRoutes");
 // 2) Build the app (NO app.listen here yet)
 const app = express();
 app.use(cookieParser());
+
+app.set("trust proxy", true);
 // CORS
-app.use(
-  cors({
-    origin: process.env.API_URL_FRONT,
-    credentials: true,
-  })
-);
+const allowList = (process.env.API_URL_FRONT || "")
+  .split(",")
+  .map((s) => s.trim().replace(/\/+$/, "")) // strip trailing "/"
+  .filter(Boolean);
+
+function corsOrigin(origin, cb) {
+  if (!origin) return cb(null, true); // allow curl/Postman (no Origin)
+  if (allowList.includes(origin)) return cb(null, true);
+  return cb(new Error(`CORS blocked for origin: ${origin}`), false);
+}
+
+const corsOptions = {
+  origin: corsOrigin,
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  exposedHeaders: ["set-cookie"],
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions)); // handle preflight
 
 const webhookStripeHandler = require("./routes/webhookStripe");
 
@@ -47,6 +64,10 @@ app.use(express.urlencoded({ extended: true }));
 const sessionSecret = (process.env.SESSION_SECRET || "").trim();
 if (!sessionSecret)
   console.warn("⚠️  SESSION_SECRET missing; using a dev fallback.");
+const isProd = process.env.NODE_ENV === "production";
+const cookieDomain =
+  (process.env.FRONT_COOKIE_DOMAIN || "").trim() || undefined;
+
 app.use(
   session({
     secret: sessionSecret || "dev-secret-change-me",
@@ -54,12 +75,20 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
+      // Frontend and API are same-site (subdomains): Lax is OK for XHR/fetch
       sameSite: "lax",
-      secure: false,
+      secure: isProd, // must be true on HTTPS
+      domain: cookieDomain, // .link234.com so subdomains share cookie
       maxAge: 24 * 60 * 60 * 1000,
     },
   })
 );
+app.use((req, res, next) => {
+  if (req.method === "OPTIONS") {
+    console.log("Preflight from:", req.headers.origin);
+  }
+  next();
+});
 
 // passport
 configurePassport(passport);
@@ -72,7 +101,6 @@ app.use("/catalogues", express.static(path.join(__dirname, "catalogues")));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/public", express.static(path.join(__dirname, "public")));
 
-app.set("trust proxy", true);
 const { geoCountryGeoip } = require("./middleware/geoCountryGeoip");
 
 // routes
