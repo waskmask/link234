@@ -15,4 +15,5 @@ const authMiddleware = require("../middleware/authMiddleware");
 // Route to change email address
 router.put("/change-email", authMiddleware, authController.changeEmailAddress);
 router.post("/logout", authController.logout);
+
 module.exports = router;

@@ -150,12 +150,16 @@ exports.signup = async (req, res) => {
 
 // Login
 // helper so login + logout use the same flags
+const isProd = process.env.NODE_ENV === "production";
+const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || undefined; // e.g. ".your-domain.com"
+const CROSS_SITE = process.env.CROSS_SITE === "true"; // set true if API & front are on different sites
+
 const cookieOpts = () => ({
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-  path: "/", // important: use same path for clearCookie
-  maxAge: 24 * 60 * 60 * 1000,
+  secure: isProd, // must be true on HTTPS (required if SameSite=None)
+  sameSite: CROSS_SITE ? "none" : "lax", // "none" only when truly cross-site
+  path: "/", // keep this constant
+  maxAge: 24 * 60 * 60 * 1000, // 1 day
 });
 
 exports.login = (req, res, next) => {
@@ -169,8 +173,7 @@ exports.login = (req, res, next) => {
           .json({ message: info ? info.message : "Login failed" });
       }
       const token = generateToken(user);
-      res.cookie("token", token, cookieOpts());
-      // Optional: you can omit sending the token in JSON if your frontend doesn’t need it
+      res.cookie("token", token, cookieOpts()); // <- unchanged, but now opts are consistent
       return res.json({ success: true });
     }
   )(req, res, next);
@@ -397,9 +400,27 @@ exports.changeEmailAddress = async (req, res) => {
 // logout
 exports.logout = async (req, res) => {
   try {
-    // destroy session if you use express-session (safe even if unused)
     req.session?.destroy?.(() => {});
-    res.clearCookie("token", { ...cookieOpts(), maxAge: 0 }); // same flags!
+
+    // Build the exact same opts we used when setting the cookie
+    const base = { ...cookieOpts(), maxAge: 0 };
+
+    // Clear the primary cookie
+    res.clearCookie("token", base);
+
+    // Also clear common variants (some browsers are picky about domain/path)
+    // without domain
+    res.clearCookie("token", { ...base, domain: undefined });
+    // with explicit root path is already in base; add a defensive current-path clear:
+    res.clearCookie("token", { ...base, path: req.baseUrl || req.path || "/" });
+
+    // If you have refresh token, clear it too:
+    res.clearCookie("refreshToken", base);
+    res.clearCookie("refreshToken", { ...base, domain: undefined });
+
+    // Tell intermediaries not to cache
+    res.setHeader("Cache-Control", "no-store");
+
     return res.json({ success: true });
   } catch (e) {
     return res.status(200).json({ success: true }); // fail-safe

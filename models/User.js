@@ -7,14 +7,7 @@ const ProductSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true, maxlength: 120 },
     imageUrl: { type: String, trim: true, default: "" },
-    price: { type: Number, min: 0, default: 0 }, // keep simple
-    currency: {
-      type: String,
-      default: "USD",
-      uppercase: true,
-      minlength: 3,
-      maxlength: 3,
-    },
+    price: { type: String },
     shopUrl: { type: String, required: true, trim: true },
     isPublic: { type: Boolean, default: true },
     sort: { type: Number, default: 0 },
@@ -34,11 +27,12 @@ const ReleaseSchema = new mongoose.Schema(
         "ytmusic",
         "soundcloud",
         "applemusic",
+        "vibrer",
         "other",
       ],
       required: true,
     },
-    title: { type: String, required: true, trim: true, maxlength: 160 },
+    title: { type: String, required: true, trim: true, maxlength: 90 },
     linkUrl: { type: String, required: true, trim: true }, // full URL to media
     posterUrl: { type: String, trim: true, default: "" }, // cover/thumbnail (optional)
     isPublic: { type: Boolean, default: true },
@@ -46,6 +40,74 @@ const ReleaseSchema = new mongoose.Schema(
     releaseDate: { type: Date },
   },
   { _id: true, timestamps: true }
+);
+
+const TEMPLATE_NAMES = [
+  "one_theme", // default gradient
+  "sunset_glow", // gradient
+  "ocean_breeze", // gradient
+  "mint_fresh", // gradient
+  "lilac_dream",
+  "lagoon_mist",
+  "lavender_sky",
+  "dark_theme",
+  "cappuccino",
+  "image_banner", // image-based background
+];
+
+const TemplateSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      enum: TEMPLATE_NAMES,
+      default: "one_theme",
+      required: true,
+    },
+    background_img: { type: String, default: "" }, // URL or /uploads/...
+    accent_color: { type: String, default: "#0b051d" },
+    accent_forground_color: { type: String, default: "#ffffff" },
+    text_color: { type: String, default: "#0b051d" },
+    link_color: { type: String, default: "#0231ebff" },
+    background: {
+      type: String,
+      default: "#ffffff",
+    },
+  },
+  { _id: false }
+);
+
+const MembershipSnapshotSchema = new mongoose.Schema(
+  {
+    plan: { type: mongoose.Schema.Types.ObjectId, ref: "MembershipPlan" },
+    planKey: { type: String }, // denormalized from plan.slug
+    planName: { type: String }, // denormalized from plan.displayName
+    provider: {
+      type: String,
+      enum: ["stripe", "razorpay", "manual", "other"],
+      default: "manual",
+    },
+    lastPurchaseId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "MembershipPurchase",
+    },
+
+    region: { type: String, enum: ["IN", "EU", "INTL"] },
+    currency: { type: String }, // "INR" | "EUR" | "USD"
+    baseAmountMinor: { type: Number, default: 0 },
+    discountMinor: { type: Number, default: 0 },
+    finalAmountMinor: { type: Number, default: 0 },
+    couponCode: { type: String, uppercase: true, trim: true, default: "" },
+
+    durationDays: { type: Number, default: 0 },
+    currentPeriodStart: { type: Date },
+    currentPeriodEnd: { type: Date }, // replaces/duplicates membershipExpires
+    status: {
+      type: String,
+      enum: ["inactive", "active", "past_due", "canceled"],
+      default: "inactive",
+    },
+  },
+  { _id: false }
 );
 
 const userSchema = new mongoose.Schema({
@@ -72,7 +134,20 @@ const userSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ["business", "private", "creator", "influencer", "model", "musician"],
+    enum: [
+      "business",
+      "private",
+      "artist",
+      "actor",
+      "accountant",
+      "influencer",
+      "creator",
+      "engineer",
+      "model",
+      "musician",
+      "singer",
+      "software",
+    ],
   },
   socialLinks: {
     facebook: String,
@@ -104,22 +179,35 @@ const userSchema = new mongoose.Schema({
     },
   ],
   additionalLinks: [{ title: String, link: String }],
-  membershipExpires: Date,
+  membership: {
+    type: MembershipSnapshotSchema,
+    default: () => ({ status: "inactive" }),
+  },
   referralCode: {
     type: String,
     default: () => nanoid("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", 8),
   },
+  referred_by: { type: String, default: "" }, // code they entered (coupon or referralCode)
+  referredByUser: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // resolved when code belongs to a user
+  referredAt: { type: Date },
   shortLink: String,
   qrCodePNG: String,
   qrCodeSVG: String,
   products: { type: [ProductSchema], default: [] },
   releases: { type: [ReleaseSchema], default: [] },
+  template: { type: TemplateSchema, default: () => ({}) },
   status: {
     type: String,
     enum: ["inactive", "suspended", "active"],
     default: "active",
   },
   createdAt: { type: Date, default: Date.now },
+});
+
+// Optional convenience
+userSchema.virtual("isMemberActive").get(function () {
+  const end = this.membership?.currentPeriodEnd;
+  return !!(end && end > new Date() && this.membership?.status === "active");
 });
 
 // Password hash middleware

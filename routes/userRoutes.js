@@ -1,5 +1,6 @@
 // routes/userRoutes.js
 const express = require("express");
+const User = require("../models/User");
 const userController = require("../controllers/userController");
 const linksController = require("../controllers/linkController");
 const catelogueController = require("../controllers/catelogueController");
@@ -48,6 +49,11 @@ router.delete(
 
 router.put(
   "/update-social-links",
+  authMiddleware,
+  linksController.updateSocialLinks
+);
+router.patch(
+  "/social-links",
   authMiddleware,
   linksController.updateSocialLinks
 );
@@ -108,5 +114,24 @@ router.get("/get-user/:username", userController.getUserByUsername);
 
 //remove address from user
 router.delete("/delete-address", authMiddleware, userController.removeAddress);
+
+router.get("/me/membership", authMiddleware, async (req, res) => {
+  const user = await User.findById(req.user.id).select("membership");
+  const now = new Date();
+  const active = !!(
+    user?.membership?.status === "active" &&
+    user?.membership?.currentPeriodEnd &&
+    user.membership.currentPeriodEnd > now
+  );
+  const endsInDays = user?.membership?.currentPeriodEnd
+    ? Math.ceil((user.membership.currentPeriodEnd - now) / 86400000)
+    : null;
+
+  res.json({
+    active,
+    endsInDays,
+    membership: user?.membership || null,
+  });
+});
 
 module.exports = router;
