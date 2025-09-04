@@ -24,11 +24,11 @@ const geoRoutes = require("./routes/geoRoutes");
 var app = express();
 router.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-app.use(
-  cors({
-    origin: "*",
-  })
-);
+// app.use(
+//   cors({
+//     origin: "*",
+//   })
+// );
 // app.use(
 //   session({
 //     secret: process.env.JWT_SECRET,
@@ -47,6 +47,57 @@ app.get("/api/health", (req, res) =>
 /* ---------- proxy & cookies ---------- */
 app.set("trust proxy", 1); // HTTPS behind nginx/plesk
 app.use(cookieParser());
+
+/* ---------- CORS (env-driven) ---------- */
+const allowList = (process.env.API_URL_FRONT || "")
+  .split(",")
+  .map((s) => s.trim().replace(/\/+$/, ""))
+  .filter(Boolean);
+
+function corsOrigin(origin, cb) {
+  if (!origin) return cb(null, true); // curl/postman
+  return cb(null, allowList.includes(origin)); // strict allowlist
+}
+
+const corsOptions = {
+  origin: corsOrigin,
+  credentials: true, // let browser send cookies
+};
+
+// Preflight short-circuit so OPTIONS never 500/504
+app.use((req, res, next) => {
+  if (req.method !== "OPTIONS") return next();
+
+  const origin = req.headers.origin;
+  const allowed = origin && allowList.includes(origin);
+
+  if (allowed) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    // reflect what the browser asked for:
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      req.headers["access-control-request-headers"] || ""
+    );
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      req.headers["access-control-request-method"] ||
+        "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+    );
+    res.setHeader("Access-Control-Max-Age", "86400");
+  }
+  return res.sendStatus(204);
+});
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
+app.use((req, res, next) => {
+  console.log(
+    `Request Origin: ${req.headers.origin} | Path: ${req.path} | Method: ${req.method}`
+  );
+  next();
+});
 
 /* ---------- Stripe webhook (raw) BEFORE body parsers ---------- */
 const webhookStripeHandler = require("./routes/webhookStripe");
