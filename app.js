@@ -20,6 +20,7 @@ const adminAuthRoutes = require("./routes/adminAuthRoutes");
 const geoRoutes = require("./routes/geoRoutes");
 
 const app = express();
+
 app.get("/api/health", (req, res) =>
   res.status(200).json({
     ok: true,
@@ -27,60 +28,26 @@ app.get("/api/health", (req, res) =>
     message: process.env.SESSION_SECRET,
   })
 );
+
 /* ---------- proxy & cookies ---------- */
-app.set("trust proxy", 1); // HTTPS behind nginx/plesk
+app.set("trust proxy", 1);
 app.use(cookieParser());
 
-/* ---------- CORS (env-driven) ---------- */
-const allowList = (process.env.API_URL_FRONT || "")
-  .split(",")
-  .map((s) => s.trim().replace(/\/+$/, ""))
-  .filter(Boolean);
-
-function corsOrigin(origin, cb) {
-  if (!origin) return cb(null, true); // curl/postman
-  return cb(null, allowList.includes(origin)); // strict allowlist
-}
-
+/* ---------- CORS (allow all origins) ---------- */
 const corsOptions = {
-  origin: corsOrigin,
-  credentials: true, // let browser send cookies
+  origin: true, // reflect any origin
+  credentials: true, // allow cookies/auth headers
 };
-
-// Preflight short-circuit so OPTIONS never 500/504
-app.use((req, res, next) => {
-  if (req.method !== "OPTIONS") return next();
-
-  const origin = req.headers.origin;
-  const allowed = origin && allowList.includes(origin);
-
-  if (allowed) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-    // reflect what the browser asked for:
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      req.headers["access-control-request-headers"] || ""
-    );
-    res.setHeader(
-      "Access-Control-Allow-Methods",
-      req.headers["access-control-request-method"] ||
-        "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-    );
-    res.setHeader("Access-Control-Max-Age", "86400");
-  }
-  return res.sendStatus(204);
-});
-
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
+
 app.use((req, res, next) => {
   console.log(
     `Request Origin: ${req.headers.origin} | Path: ${req.path} | Method: ${req.method}`
   );
   next();
 });
+
 /* ---------- Stripe webhook (raw) BEFORE body parsers ---------- */
 const webhookStripeHandler = require("./routes/webhookStripe");
 app.post(
@@ -110,12 +77,12 @@ app.use(
     secret: sessionSecret || "dev-secret-change-me",
     resave: false,
     saveUninitialized: false,
-    proxy: true, // needed when TLS terminates at proxy
+    proxy: true,
     cookie: {
       httpOnly: true,
-      sameSite: "lax", // subdomain → same-site; works for XHR
-      secure: isProd, // must be true on HTTPS
-      domain: cookieDomain, // e.g. .link234.com
+      sameSite: "lax",
+      secure: isProd,
+      domain: cookieDomain,
       maxAge: 24 * 60 * 60 * 1000,
     },
   })
@@ -164,13 +131,10 @@ app.use((err, req, res, next) => {
 const DEFAULT_PORT = Number(process.env.PORT) || 3000;
 
 async function start(port = DEFAULT_PORT) {
-  // Start server immediately so Passenger sees a bound port
   const server = app.listen(port, () => {
-    console.log("CORS allowList:", allowList);
     console.log(`🚀 Server listening on ${port} (pid ${process.pid})`);
   });
 
-  // Try DB connection in background (won’t block startup)
   connectDB()
     .then(() => console.log("✅ DB connected"))
     .catch((err) => console.error("❌ DB connect error:", err?.message || err));
