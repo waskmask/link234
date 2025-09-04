@@ -151,13 +151,15 @@ exports.signup = async (req, res) => {
 // Login
 // helper so login + logout use the same flags
 const isProd = process.env.NODE_ENV === "production";
-const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || undefined; // e.g. ".your-domain.com"
-const CROSS_SITE = process.env.CROSS_SITE === "true"; // set true if API & front are on different sites
+const COOKIE_DOMAIN =
+  (process.env.FRONT_COOKIE_DOMAIN || "").trim() || undefined; // e.g. ".your-domain.com"
+const CROSS_SITE = String(process.env.CROSS_SITE).toLowerCase() === "true"; // set true if API & front are on different sites
 
 const cookieOpts = () => ({
   httpOnly: true,
   secure: isProd, // must be true on HTTPS (required if SameSite=None)
   sameSite: CROSS_SITE ? "none" : "lax", // "none" only when truly cross-site
+  domain: COOKIE_DOMAIN,
   path: "/", // keep this constant
   maxAge: 24 * 60 * 60 * 1000, // 1 day
 });

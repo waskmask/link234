@@ -22,8 +22,7 @@ const adminAuthRoutes = require("./routes/adminAuthRoutes");
 const geoRoutes = require("./routes/geoRoutes");
 
 var app = express();
-router.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+
 // app.use(
 //   cors({
 //     origin: "*",
@@ -110,6 +109,8 @@ app.post(
 /* ---------- other webhooks ---------- */
 app.use("/api/razorpay/webhook", require("./routes/webhookRazorpay"));
 
+router.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 /* ---------- parsers (after Stripe raw) ---------- */
 
 /* ---------- sessions ---------- */
