@@ -147,7 +147,7 @@ app.use(
   require("./routes/membershipPayRoutes")
 );
 
-// admin routes
+// admin routes //
 app.use("/api/admin-users", adminAuthRoutes);
 
 /* ---------- errors ---------- */
