@@ -9,7 +9,7 @@ const session = require("express-session");
 const { connectDB, disconnectDB } = require("./config/db");
 const cookieParser = require("cookie-parser");
 
-// routes + passport
+// routes
 const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
 const formRoutes = require("./routes/formRoutes");
@@ -18,21 +18,47 @@ const templateRoutes = require("./routes/templateRoutes");
 const memberShipRoutes = require("./routes/membershipRoutes");
 const adminAuthRoutes = require("./routes/adminAuthRoutes");
 const geoRoutes = require("./routes/geoRoutes");
-// 2) Build the app (NO app.listen here yet)
+
 const app = express();
+
+/* ---------- proxy & cookies ---------- */
+app.set("trust proxy", 1); // HTTPS behind nginx/plesk
 app.use(cookieParser());
 
-app.set("trust proxy", true);
-// CORS
+/* ---------- CORS (env-driven) ---------- */
 const allowList = (process.env.API_URL_FRONT || "")
   .split(",")
-  .map((s) => s.trim().replace(/\/+$/, "")) // strip trailing "/"
+  .map((s) => s.trim().replace(/\/+$/, "")) // strip trailing slash
   .filter(Boolean);
 
+// Preflight short-circuit so OPTIONS never 500/504
+app.use((req, res, next) => {
+  if (req.method !== "OPTIONS") return next();
+
+  const origin = req.headers.origin;
+  const allowed = origin && allowList.includes(origin);
+
+  if (allowed) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-Requested-With"
+    );
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    );
+  }
+  return res.sendStatus(204);
+});
+
 function corsOrigin(origin, cb) {
-  if (!origin) return cb(null, true); // allow curl/Postman (no Origin)
+  if (!origin) return cb(null, true); // curl/postman/no Origin
   if (allowList.includes(origin)) return cb(null, true);
-  return cb(new Error(`CORS blocked for origin: ${origin}`), false);
+  console.warn("[CORS] blocked:", origin, "allowList:", allowList);
+  return cb(null, false); // deny quietly (no 500)
 }
 
 const corsOptions = {
@@ -44,26 +70,33 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions)); // handle preflight
-
+app.options("*", cors(corsOptions)); // extra safety
+app.use((req, res, next) => {
+  console.log(
+    `Request Origin: ${req.headers.origin} | Path: ${req.path} | Method: ${req.method}`
+  );
+  next();
+});
+/* ---------- Stripe webhook (raw) BEFORE body parsers ---------- */
 const webhookStripeHandler = require("./routes/webhookStripe");
-
-// MUST be raw. MUST be before express.json()
 app.post(
   "/api/stripe/webhook",
   express.raw({ type: "application/json" }),
   webhookStripeHandler
 );
 
+/* ---------- other webhooks ---------- */
 app.use("/api/razorpay/webhook", require("./routes/webhookRazorpay"));
-// parsers
+
+/* ---------- parsers (after Stripe raw) ---------- */
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// sessions
+/* ---------- sessions ---------- */
 const sessionSecret = (process.env.SESSION_SECRET || "").trim();
 if (!sessionSecret)
   console.warn("⚠️  SESSION_SECRET missing; using a dev fallback.");
+
 const isProd = process.env.NODE_ENV === "production";
 const cookieDomain =
   (process.env.FRONT_COOKIE_DOMAIN || "").trim() || undefined;
@@ -73,37 +106,30 @@ app.use(
     secret: sessionSecret || "dev-secret-change-me",
     resave: false,
     saveUninitialized: false,
+    proxy: true, // needed when TLS terminates at proxy
     cookie: {
       httpOnly: true,
-      // Frontend and API are same-site (subdomains): Lax is OK for XHR/fetch
-      sameSite: "lax",
+      sameSite: "lax", // subdomain → same-site; works for XHR
       secure: isProd, // must be true on HTTPS
-      domain: cookieDomain, // .link234.com so subdomains share cookie
+      domain: cookieDomain, // e.g. .link234.com
       maxAge: 24 * 60 * 60 * 1000,
     },
   })
 );
-app.use((req, res, next) => {
-  if (req.method === "OPTIONS") {
-    console.log("Preflight from:", req.headers.origin);
-  }
-  next();
-});
 
-// passport
+/* ---------- passport ---------- */
 configurePassport(passport);
 app.use(passport.initialize());
 app.use(passport.session());
 
-// static
+/* ---------- static ---------- */
 app.use("/qrcodes", express.static(path.join(__dirname, "qrcodes")));
 app.use("/catalogues", express.static(path.join(__dirname, "catalogues")));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/public", express.static(path.join(__dirname, "public")));
 
+/* ---------- routes ---------- */
 const { geoCountryGeoip } = require("./middleware/geoCountryGeoip");
-
-// routes
 
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
@@ -124,22 +150,20 @@ app.use(
 // admin routes
 app.use("/api/admin-users", adminAuthRoutes);
 
-// errors
+/* ---------- errors ---------- */
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).send({ message: "Something went wrong!" });
 });
 
-// 3) Start server ONCE after DB connects
+/* ---------- start ---------- */
 const DEFAULT_PORT = Number(process.env.PORT) || 3000;
 
 async function start(port = DEFAULT_PORT) {
-  // helpful trace: if you EVER see this twice, you know what's wrong
-  // console.trace("🔈 app.listen is being called");
-
   await connectDB();
 
   const server = app.listen(port, () => {
+    console.log("CORS allowList:", allowList);
     console.log(`🚀 Server listening on ${port} (pid ${process.pid})`);
   });
 
@@ -161,9 +185,9 @@ async function start(port = DEFAULT_PORT) {
         process.exit(0);
       }
     });
+
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
 }
 
-// 4) Only start if this file is run directly (prevents double-run if imported)
 if (require.main === module) start();
