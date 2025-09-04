@@ -30,6 +30,10 @@ app.get("/api/health", (req, res) =>
     message: process.env.SESSION_SECRET,
   })
 );
+
+/* ---------- proxy & cookies ---------- */
+app.set("trust proxy", 1); // HTTPS behind nginx/plesk
+app.use(cookieParser());
 // app.use("/public", express.static("public"));
 // app.use("/uploads", express.static("uploads"));
 
