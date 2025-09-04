@@ -10,14 +10,14 @@ const { connectDB, disconnectDB } = require("./config/db");
 const cookieParser = require("cookie-parser");
 
 // routes
-const authRoutes = require("./routes/authRoutes");
-const userRoutes = require("./routes/userRoutes");
-const formRoutes = require("./routes/formRoutes");
-const productMediaRoutes = require("./routes/productMediaRoutes");
-const templateRoutes = require("./routes/templateRoutes");
-const memberShipRoutes = require("./routes/membershipRoutes");
-const adminAuthRoutes = require("./routes/adminAuthRoutes");
-const geoRoutes = require("./routes/geoRoutes");
+// const authRoutes = require("./routes/authRoutes");
+// const userRoutes = require("./routes/userRoutes");
+// const formRoutes = require("./routes/formRoutes");
+// const productMediaRoutes = require("./routes/productMediaRoutes");
+// const templateRoutes = require("./routes/templateRoutes");
+// const memberShipRoutes = require("./routes/membershipRoutes");
+// const adminAuthRoutes = require("./routes/adminAuthRoutes");
+// const geoRoutes = require("./routes/geoRoutes");
 
 const app = express();
 
@@ -49,77 +49,77 @@ app.use((req, res, next) => {
 });
 
 /* ---------- Stripe webhook (raw) BEFORE body parsers ---------- */
-const webhookStripeHandler = require("./routes/webhookStripe");
-app.post(
-  "/api/stripe/webhook",
-  express.raw({ type: "application/json" }),
-  webhookStripeHandler
-);
+// const webhookStripeHandler = require("./routes/webhookStripe");
+// app.post(
+//   "/api/stripe/webhook",
+//   express.raw({ type: "application/json" }),
+//   webhookStripeHandler
+// );
 
 /* ---------- other webhooks ---------- */
-app.use("/api/razorpay/webhook", require("./routes/webhookRazorpay"));
+// app.use("/api/razorpay/webhook", require("./routes/webhookRazorpay"));
 
 /* ---------- parsers (after Stripe raw) ---------- */
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 /* ---------- sessions ---------- */
-const sessionSecret = (process.env.SESSION_SECRET || "").trim();
-if (!sessionSecret)
-  console.warn("⚠️  SESSION_SECRET missing; using a dev fallback.");
+// const sessionSecret = (process.env.SESSION_SECRET || "").trim();
+// if (!sessionSecret)
+//   console.warn("⚠️  SESSION_SECRET missing; using a dev fallback.");
 
-const isProd = process.env.NODE_ENV === "production";
-const cookieDomain =
-  (process.env.FRONT_COOKIE_DOMAIN || "").trim() || undefined;
+// const isProd = process.env.NODE_ENV === "production";
+// const cookieDomain =
+//   (process.env.FRONT_COOKIE_DOMAIN || "").trim() || undefined;
 
-app.use(
-  session({
-    secret: sessionSecret || "dev-secret-change-me",
-    resave: false,
-    saveUninitialized: false,
-    proxy: true,
-    cookie: {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: isProd,
-      domain: cookieDomain,
-      maxAge: 24 * 60 * 60 * 1000,
-    },
-  })
-);
+// app.use(
+//   session({
+//     secret: sessionSecret || "dev-secret-change-me",
+//     resave: false,
+//     saveUninitialized: false,
+//     proxy: true,
+//     cookie: {
+//       httpOnly: true,
+//       sameSite: "lax",
+//       secure: isProd,
+//       domain: cookieDomain,
+//       maxAge: 24 * 60 * 60 * 1000,
+//     },
+//   })
+// );
 
 /* ---------- passport ---------- */
-configurePassport(passport);
-app.use(passport.initialize());
-app.use(passport.session());
+// configurePassport(passport);
+// app.use(passport.initialize());
+// app.use(passport.session());
 
 /* ---------- static ---------- */
-app.use("/qrcodes", express.static(path.join(__dirname, "qrcodes")));
-app.use("/catalogues", express.static(path.join(__dirname, "catalogues")));
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-app.use("/public", express.static(path.join(__dirname, "public")));
+// app.use("/qrcodes", express.static(path.join(__dirname, "qrcodes")));
+// app.use("/catalogues", express.static(path.join(__dirname, "catalogues")));
+// app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// app.use("/public", express.static(path.join(__dirname, "public")));
 
 /* ---------- routes ---------- */
-const { geoCountryGeoip } = require("./middleware/geoCountryGeoip");
+// const { geoCountryGeoip } = require("./middleware/geoCountryGeoip");
 
-app.use("/api/auth", authRoutes);
-app.use("/api/user", userRoutes);
-app.use("/api/form", formRoutes);
-app.use("/api/product-media", productMediaRoutes);
-app.use("/api/templates", templateRoutes);
-app.use("/api/memberships", memberShipRoutes);
-app.use("/api/membership", require("./routes/membershipCheckoutRoutes"));
-app.use("/api/coupons", require("./routes/couponAdminRoutes"));
+// app.use("/api/auth", authRoutes);
+// app.use("/api/user", userRoutes);
+// app.use("/api/form", formRoutes);
+// app.use("/api/product-media", productMediaRoutes);
+// app.use("/api/templates", templateRoutes);
+// app.use("/api/memberships", memberShipRoutes);
+// app.use("/api/membership", require("./routes/membershipCheckoutRoutes"));
+// app.use("/api/coupons", require("./routes/couponAdminRoutes"));
 
-app.use("/api/geo", geoRoutes);
-app.use(
-  "/api/membership",
-  geoCountryGeoip,
-  require("./routes/membershipPayRoutes")
-);
+// app.use("/api/geo", geoRoutes);
+// app.use(
+//   "/api/membership",
+//   geoCountryGeoip,
+//   require("./routes/membershipPayRoutes")
+// );
 
 // admin routes //
-app.use("/api/admin-users", adminAuthRoutes);
+// app.use("/api/admin-users", adminAuthRoutes);
 
 /* ---------- errors ---------- */
 app.use((err, req, res, next) => {
