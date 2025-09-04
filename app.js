@@ -1,165 +1,73 @@
-require("dotenv").config();
-
 const express = require("express");
-const cors = require("cors");
-const path = require("path");
-const passport = require("passport");
-const configurePassport = require("./config/passport");
 const session = require("express-session");
-// const { connectDB, disconnectDB } = require("./config/db");
-// const cookieParser = require("cookie-parser");
-
-// routes
-// const authRoutes = require("./routes/authRoutes");
-// const userRoutes = require("./routes/userRoutes");
-// const formRoutes = require("./routes/formRoutes");
-// const productMediaRoutes = require("./routes/productMediaRoutes");
-// const templateRoutes = require("./routes/templateRoutes");
-// const memberShipRoutes = require("./routes/membershipRoutes");
-// const adminAuthRoutes = require("./routes/adminAuthRoutes");
-// const geoRoutes = require("./routes/geoRoutes");
-
-const app = express();
-
-app.get("/api/health", (req, res) =>
-  res.status(200).json({
-    ok: true,
-    pid: process.pid,
-    message: process.env.SESSION_SECRET,
+const router = express.Router();
+require("dotenv").config();
+// const routes = require("./routes/index");
+// const mongoose = require("mongoose");
+// const swaggerJSDoc = require("swagger-jsdoc");
+// const swaggerUi = require("swagger-ui-express");
+// const passport = require("passport");
+// const url = process.env.MONGODB_PROD;
+// const swaggerDefinition = require("./config").SWAGGER_DEFINATION;
+var cors = require("cors");
+var app = express();
+router.use(express.urlencoded({ extended: true }));
+app.use(express.json());
+app.use(
+  cors({
+    origin: "*",
   })
 );
+app.use(
+  session({
+    secret: process.env.JWT_SECRET,
+    resave: false,
+    saveUninitialized: false,
+  })
+);
+// app.use("/public", express.static("public"));
+// app.use("/uploads", express.static("uploads"));
 
-/* ---------- proxy & cookies ---------- */
-// app.set("trust proxy", 1);
-// app.use(cookieParser());
+// mongoose.connect(url, { useNewUrlParser: true });
 
-/* ---------- CORS (allow all origins) ---------- */
-const corsOptions = {
-  origin: true, // reflect any origin
-  credentials: true, // allow cookies/auth headers
-};
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+//swagger
+// const options = {
+//   swaggerDefinition,
+//   apis: ["./swagger/*.js"],
+// };
 
-app.use((req, res, next) => {
-  console.log(
-    `Request Origin: ${req.headers.origin} | Path: ${req.path} | Method: ${req.method}`
-  );
-  next();
-});
+// const swaggerSpec = swaggerJSDoc(options);
+// app.get("/swagger.json", function (req, res) {
+//   res.setHeader("Content-Type", "application/json");
+//   res.send(swaggerSpec);
+// });
 
-/* ---------- Stripe webhook (raw) BEFORE body parsers ---------- */
-// const webhookStripeHandler = require("./routes/webhookStripe");
-// app.post(
-//   "/api/stripe/webhook",
-//   express.raw({ type: "application/json" }),
-//   webhookStripeHandler
-// );
+// app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-/* ---------- other webhooks ---------- */
-// app.use("/api/razorpay/webhook", require("./routes/webhookRazorpay"));
+// const con = mongoose.connection;
 
-/* ---------- parsers (after Stripe raw) ---------- */
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// con.on("open", () => {
+//   console.log("Connected...");
+// });
 
-/* ---------- sessions ---------- */
-// const sessionSecret = (process.env.SESSION_SECRET || "").trim();
-// if (!sessionSecret)
-//   console.warn("⚠️  SESSION_SECRET missing; using a dev fallback.");
-
-// const isProd = process.env.NODE_ENV === "production";
-// const cookieDomain =
-//   (process.env.FRONT_COOKIE_DOMAIN || "").trim() || undefined;
-
-// app.use(
-//   session({
-//     secret: sessionSecret || "dev-secret-change-me",
-//     resave: false,
-//     saveUninitialized: false,
-//     proxy: true,
-//     cookie: {
-//       httpOnly: true,
-//       sameSite: "lax",
-//       secure: isProd,
-//       domain: cookieDomain,
-//       maxAge: 24 * 60 * 60 * 1000,
-//     },
-//   })
-// );
-
-/* ---------- passport ---------- */
-// configurePassport(passport);
+//Routes
+// app.use("/", routes(router));
 // app.use(passport.initialize());
 // app.use(passport.session());
 
-/* ---------- static ---------- */
-// app.use("/qrcodes", express.static(path.join(__dirname, "qrcodes")));
-// app.use("/catalogues", express.static(path.join(__dirname, "catalogues")));
-// app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-// app.use("/public", express.static(path.join(__dirname, "public")));
-
-/* ---------- routes ---------- */
-// const { geoCountryGeoip } = require("./middleware/geoCountryGeoip");
-
-// app.use("/api/auth", authRoutes);
-// app.use("/api/user", userRoutes);
-// app.use("/api/form", formRoutes);
-// app.use("/api/product-media", productMediaRoutes);
-// app.use("/api/templates", templateRoutes);
-// app.use("/api/memberships", memberShipRoutes);
-// app.use("/api/membership", require("./routes/membershipCheckoutRoutes"));
-// app.use("/api/coupons", require("./routes/couponAdminRoutes"));
-
-// app.use("/api/geo", geoRoutes);
-// app.use(
-//   "/api/membership",
-//   geoCountryGeoip,
-//   require("./routes/membershipPayRoutes")
-// );
-
-// admin routes //
-// app.use("/api/admin-users", adminAuthRoutes);
-
-/* ---------- errors ---------- */
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).send({ message: "Something went wrong!" });
+// error handler
+app.use((error, req, res, next) => {
+  if (!error) {
+    return next();
+  }
+  console.log(error);
+  res.status(error.status || 500).send({
+    status: error.status || 500,
+    error: error.message || error,
+    data: error.data || "",
+  });
 });
 
-/* ---------- start ---------- */
-const DEFAULT_PORT = Number(process.env.PORT) || 3000;
-
-async function start(port = DEFAULT_PORT) {
-  const server = app.listen(port, () => {
-    console.log(`🚀 Server listening on ${port} (pid ${process.pid})`);
-  });
-
-  // connectDB()
-  //   .then(() => console.log("✅ DB connected"))
-  //   .catch((err) => console.error("❌ DB connect error:", err?.message || err));
-
-  server.on("error", (err) => {
-    if (err.code === "EADDRINUSE") {
-      console.warn(`⚠️ Port ${port} in use, trying ${port + 1}...`);
-      setTimeout(() => start(port + 1), 250);
-    } else {
-      console.error("Server error:", err);
-      process.exit(1);
-    }
-  });
-
-  // const stop = () =>
-  //   server.close(async () => {
-  //     try {
-  //       await disconnectDB?.();
-  //     } finally {
-  //       process.exit(0);
-  //     }
-  //   });
-
-  // process.on("SIGINT", stop);
-  // process.on("SIGTERM", stop);
-}
-
-if (require.main === module) start();
+app.listen(3000, () => {
+  console.log("Server started");
+});
