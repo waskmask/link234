@@ -151,18 +151,41 @@ exports.signup = async (req, res) => {
 // Login
 // helper so login + logout use the same flags
 const isProd = process.env.NODE_ENV === "production";
-const COOKIE_DOMAIN =
-  (process.env.FRONT_COOKIE_DOMAIN || "").trim() || undefined; // e.g. ".your-domain.com"
-const CROSS_SITE = String(process.env.CROSS_SITE).toLowerCase() === "true"; // set true if API & front are on different sites
+const CONFIG_DOMAIN =
+  (process.env.FRONT_COOKIE_DOMAIN || "").trim() || undefined;
 
-const cookieOpts = () => ({
-  httpOnly: true,
-  secure: isProd, // must be true on HTTPS (required if SameSite=None)
-  sameSite: CROSS_SITE ? "none" : "lax", // "none" only when truly cross-site
-  domain: COOKIE_DOMAIN,
-  path: "/", // keep this constant
-  maxAge: 24 * 60 * 60 * 1000, // 1 day
-});
+// Build cookie opts from the current request so attributes always match
+function cookieOptsFromReq(req) {
+  // detect cross-site by comparing Origin host with API host
+  let crossSite = false;
+  const origin = req.headers.origin || "";
+  try {
+    if (origin) {
+      const oHost = new URL(origin).hostname;
+      crossSite = oHost !== req.hostname;
+    }
+  } catch {
+    /* ignore */
+  }
+
+  // running behind proxy? trust proxy is set in app.js; still check header
+  const https = req.secure || req.headers["x-forwarded-proto"] === "https";
+
+  // apply domain only if it actually matches current host (keeps localhost/dev working)
+  const useDomain =
+    CONFIG_DOMAIN && req.hostname.endsWith(CONFIG_DOMAIN.replace(/^\./, ""))
+      ? CONFIG_DOMAIN
+      : undefined;
+
+  return {
+    httpOnly: true,
+    secure: https || (isProd && crossSite), // must be true whenever SameSite=None
+    sameSite: crossSite ? "none" : "lax", // Lax for same-site, None for cross-site XHR
+    domain: useDomain, // e.g. ".link234.com" on prod subdomains
+    path: "/",
+    maxAge: 24 * 60 * 60 * 1000,
+  };
+}
 
 exports.login = (req, res, next) => {
   passport.authenticate(
@@ -175,7 +198,7 @@ exports.login = (req, res, next) => {
           .json({ message: info ? info.message : "Login failed" });
       }
       const token = generateToken(user);
-      res.cookie("token", token, cookieOpts()); // <- unchanged, but now opts are consistent
+      res.cookie("token", token, cookieOptsFromReq(req)); // <-- key change
       return res.json({ success: true });
     }
   )(req, res, next);
@@ -404,27 +427,26 @@ exports.logout = async (req, res) => {
   try {
     req.session?.destroy?.(() => {});
 
-    // Build the exact same opts we used when setting the cookie
-    const base = { ...cookieOpts(), maxAge: 0 };
+    const base = { ...cookieOptsFromReq(req), maxAge: 0 };
 
-    // Clear the primary cookie
+    // primary clear (matches how it was set)
     res.clearCookie("token", base);
-
-    // Also clear common variants (some browsers are picky about domain/path)
-    // without domain
-    res.clearCookie("token", { ...base, domain: undefined });
-    // with explicit root path is already in base; add a defensive current-path clear:
-    res.clearCookie("token", { ...base, path: req.baseUrl || req.path || "/" });
-
-    // If you have refresh token, clear it too:
     res.clearCookie("refreshToken", base);
-    res.clearCookie("refreshToken", { ...base, domain: undefined });
 
-    // Tell intermediaries not to cache
+    // defensive variants (cover host-only vs domain cookies and odd paths)
+    const variants = [
+      { ...base, domain: undefined },
+      { ...base, path: req.baseUrl || req.path || "/" },
+      { ...base, domain: undefined, path: req.baseUrl || req.path || "/" },
+    ];
+    for (const v of variants) {
+      res.clearCookie("token", v);
+      res.clearCookie("refreshToken", v);
+    }
+
     res.setHeader("Cache-Control", "no-store");
-
     return res.json({ success: true });
-  } catch (e) {
-    return res.status(200).json({ success: true }); // fail-safe
+  } catch {
+    return res.status(200).json({ success: true });
   }
 };
