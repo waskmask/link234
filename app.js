@@ -8,6 +8,17 @@ const passport = require("passport");
 const configurePassport = require("./config/passport");
 const { connectDB, disconnectDB } = require("./config/db");
 const cookieParser = require("cookie-parser");
+
+// routes
+const authRoutes = require("./routes/authRoutes");
+const userRoutes = require("./routes/userRoutes");
+const formRoutes = require("./routes/formRoutes");
+const productMediaRoutes = require("./routes/productMediaRoutes");
+const templateRoutes = require("./routes/templateRoutes");
+const memberShipRoutes = require("./routes/membershipRoutes");
+const adminAuthRoutes = require("./routes/adminAuthRoutes");
+const geoRoutes = require("./routes/geoRoutes");
+
 var app = express();
 router.use(express.urlencoded({ extended: true }));
 app.use(express.json());
