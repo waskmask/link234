@@ -32,27 +32,27 @@ const allowList = (process.env.API_URL_FRONT || "")
   .filter(Boolean);
 
 // Preflight short-circuit so OPTIONS never 500/504
-app.use((req, res, next) => {
-  if (req.method !== "OPTIONS") return next();
+// app.use((req, res, next) => {
+//   if (req.method !== "OPTIONS") return next();
 
-  const origin = req.headers.origin;
-  const allowed = origin && allowList.includes(origin);
+//   const origin = req.headers.origin;
+//   const allowed = origin && allowList.includes(origin);
 
-  if (allowed) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, X-Requested-With"
-    );
-    res.setHeader(
-      "Access-Control-Allow-Methods",
-      "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-    );
-  }
-  return res.sendStatus(204);
-});
+//   if (allowed) {
+//     res.setHeader("Access-Control-Allow-Origin", origin);
+//     res.setHeader("Vary", "Origin");
+//     res.setHeader("Access-Control-Allow-Credentials", "true");
+//     res.setHeader(
+//       "Access-Control-Allow-Headers",
+//       "Content-Type, Authorization, X-Requested-With"
+//     );
+//     res.setHeader(
+//       "Access-Control-Allow-Methods",
+//       "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+//     );
+//   }
+//   return res.sendStatus(204);
+// });
 
 function corsOrigin(origin, cb) {
   if (!origin) return cb(null, true); // curl/postman/no Origin
