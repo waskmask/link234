@@ -129,7 +129,6 @@ const DEFAULT_PORT = Number(process.env.PORT) || 3000;
 async function start(port = DEFAULT_PORT) {
   // Start server immediately so Passenger sees a bound port
   const server = app.listen(port, () => {
-    console.log("CORS allowList:", allowList);
     console.log(`🚀 Server listening on ${port} (pid ${process.pid})`);
   });
 
