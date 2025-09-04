@@ -2,14 +2,12 @@ const express = require("express");
 const session = require("express-session");
 const router = express.Router();
 require("dotenv").config();
-// const routes = require("./routes/index");
-// const mongoose = require("mongoose");
-// const swaggerJSDoc = require("swagger-jsdoc");
-// const swaggerUi = require("swagger-ui-express");
-// const passport = require("passport");
-// const url = process.env.MONGODB_PROD;
-// const swaggerDefinition = require("./config").SWAGGER_DEFINATION;
-var cors = require("cors");
+const cors = require("cors");
+const path = require("path");
+const passport = require("passport");
+const configurePassport = require("./config/passport");
+const { connectDB, disconnectDB } = require("./config/db");
+const cookieParser = require("cookie-parser");
 var app = express();
 router.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -23,6 +21,13 @@ app.use(
     secret: process.env.JWT_SECRET,
     resave: false,
     saveUninitialized: false,
+  })
+);
+app.get("/api/health", (req, res) =>
+  res.status(200).json({
+    ok: true,
+    pid: process.pid,
+    message: process.env.SESSION_SECRET,
   })
 );
 // app.use("/public", express.static("public"));
