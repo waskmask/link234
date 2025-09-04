@@ -6,8 +6,8 @@ const path = require("path");
 const passport = require("passport");
 const configurePassport = require("./config/passport");
 const session = require("express-session");
-const { connectDB, disconnectDB } = require("./config/db");
-const cookieParser = require("cookie-parser");
+// const { connectDB, disconnectDB } = require("./config/db");
+// const cookieParser = require("cookie-parser");
 
 // routes
 // const authRoutes = require("./routes/authRoutes");
@@ -30,8 +30,8 @@ app.get("/api/health", (req, res) =>
 );
 
 /* ---------- proxy & cookies ---------- */
-app.set("trust proxy", 1);
-app.use(cookieParser());
+// app.set("trust proxy", 1);
+// app.use(cookieParser());
 
 /* ---------- CORS (allow all origins) ---------- */
 const corsOptions = {
@@ -135,9 +135,9 @@ async function start(port = DEFAULT_PORT) {
     console.log(`🚀 Server listening on ${port} (pid ${process.pid})`);
   });
 
-  connectDB()
-    .then(() => console.log("✅ DB connected"))
-    .catch((err) => console.error("❌ DB connect error:", err?.message || err));
+  // connectDB()
+  //   .then(() => console.log("✅ DB connected"))
+  //   .catch((err) => console.error("❌ DB connect error:", err?.message || err));
 
   server.on("error", (err) => {
     if (err.code === "EADDRINUSE") {
@@ -149,17 +149,17 @@ async function start(port = DEFAULT_PORT) {
     }
   });
 
-  const stop = () =>
-    server.close(async () => {
-      try {
-        await disconnectDB?.();
-      } finally {
-        process.exit(0);
-      }
-    });
+  // const stop = () =>
+  //   server.close(async () => {
+  //     try {
+  //       await disconnectDB?.();
+  //     } finally {
+  //       process.exit(0);
+  //     }
+  //   });
 
-  process.on("SIGINT", stop);
-  process.on("SIGTERM", stop);
+  // process.on("SIGINT", stop);
+  // process.on("SIGTERM", stop);
 }
 
 if (require.main === module) start();
