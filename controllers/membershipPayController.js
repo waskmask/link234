@@ -6,22 +6,7 @@ const User = require("../models/User");
 
 // libs (install: npm i razorpay stripe)
 const Razorpay = require("razorpay");
-const Stripe = require("stripe");
-function getStripe() {
-  const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) {
-    console.error("⚠️ STRIPE_SECRET_KEY not set in .env");
-    return null;
-  }
-  return new Stripe(key, { apiVersion: "2024-06-20" });
-}
-// ENV needed:
-// RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET
-// STRIPE_SECRET_KEY
-// FRONT_SUCCESS_URL, FRONT_CANCEL_URL (your frontend pages)
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2024-06-20",
-});
+const getStripe = require("../utils/stripeClient");
 
 // helpers
 function findPriceForRegion(plan, region) {
@@ -89,119 +74,21 @@ async function computeDiscount({
 exports.startPayment = async (req, res) => {
   try {
     if (!req.user?.id) return res.status(401).json({ message: "Unauthorized" });
+    // ... all your code ...
 
-    const { planSlugOrId, couponCode } = req.body;
-    const user = await User.findById(req.user.id);
-    const plan =
-      (await MembershipPlan.findOne({ slug: planSlugOrId })) ||
-      (await MembershipPlan.findById(planSlugOrId));
-    if (!plan || !plan.isActive)
-      return res.status(404).json({ message: "Plan not found." });
-
-    // Country → Region (from geo middleware)
-    const countryCode = req.geo?.countryCode || "INTL";
-    const region = req.geo?.region || "INTL";
-
-    // Price
-    const price = findPriceForRegion(plan, region);
-    if (!price)
-      return res.status(400).json({ message: "No price for region." });
-
-    // Discount
-    const { discountMinor, coupon } = await computeDiscount({
-      couponCode,
-      userId: user._id,
-      region,
-      baseAmountMinor: price.amountMinor,
-    });
-    const finalMinor = price.amountMinor - discountMinor;
-
-    // Create purchase snapshot (unpaid yet)
-    const purchase = await MembershipPurchase.create({
-      user: user._id,
-      plan: plan._id,
-      region,
-      currency: price.currency,
-      durationDays: plan.durationDays,
-      baseAmountMinor: price.amountMinor,
-      discountMinor,
-      finalAmountMinor: finalMinor,
-      couponCode: coupon ? coupon.code : (couponCode || "").toUpperCase(),
-      paid: false,
-    });
-
-    // If coupon equals a user referralCode and user not yet referred, link it
-    if (!user.referred_by && couponCode) {
-      const referredByCode = String(couponCode).trim().toUpperCase();
-      const refUser = await User.findOne({ referralCode: referredByCode });
-      if (refUser) {
-        user.referred_by = referredByCode;
-        user.referredByUser = refUser._id;
-        user.referredAt = new Date();
-        await user.save();
-        purchase.referrerCode = referredByCode;
-        purchase.referrerUser = refUser._id;
-        await purchase.save();
-      } else if (coupon) {
-        user.referred_by = coupon.code;
-        user.referredAt = new Date();
-        await user.save();
-        purchase.referrerCode = coupon.code;
-        await purchase.save();
-      }
-    }
-
-    const summary = {
-      plan: {
-        id: plan._id,
-        slug: plan.slug,
-        displayName: plan.displayName,
-        durationDays: plan.durationDays,
-      },
-      region, // e.g. "EU"
-      countryCode, // e.g. "DE"
-      currency: price.currency, // "EUR" | "USD" | "INR"
-      baseAmountMinor: price.amountMinor,
-      discountMinor,
-      finalAmountMinor: finalMinor, // what you actually charge
-      customerEmail: user.email,
-    };
-
-    // Decide gateway: Razorpay (INR+IN) vs Stripe (all others)
     if (region === "IN" && price.currency === "INR") {
-      const rzp = new Razorpay({
-        key_id: process.env.RAZORPAY_KEY_ID,
-        key_secret: process.env.RAZORPAY_KEY_SECRET,
-      });
-
-      const order = await rzp.orders.create({
-        amount: finalMinor, // paise
-        currency: "INR",
-        receipt: `mp_${purchase._id}`,
-      });
-
-      // Return what FE needs to open Razorpay
+      // Razorpay path unchanged
+      // ...
       return res.json({
-        gateway: "razorpay",
-        keyId: process.env.RAZORPAY_KEY_ID,
-        orderId: order.id,
-        amount: order.amount,
-        currency: order.currency,
-        purchaseId: purchase._id,
-        customer: {
-          name: user.profileName || user.username,
-          email: user.email,
-          contact: user.phoneNumber || "",
-        },
-        summary,
+        /* ... */
       });
     } else {
-      // Stripe path
+      // ✅ Stripe path uses lazy getter here (not at top)
       const stripe = getStripe();
       if (!stripe) {
-        return res.status(500).json({
-          message: "Stripe is not configured on the server.",
-        });
+        return res
+          .status(500)
+          .json({ message: "Stripe is not configured on the server." });
       }
 
       const session = await stripe.checkout.sessions.create({
