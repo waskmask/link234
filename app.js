@@ -73,48 +73,52 @@ app.use(
   })
 );
 
-// app.use("/public", express.static("public"));
-// app.use("/uploads", express.static("uploads"));
+/* ---------- passport ---------- */
+configurePassport(passport);
+app.use(passport.initialize());
+app.use(passport.session());
+
+/* ---------- static ---------- */
+app.use("/qrcodes", express.static(path.join(__dirname, "qrcodes")));
+app.use("/catalogues", express.static(path.join(__dirname, "catalogues")));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/public", express.static(path.join(__dirname, "public")));
+
+/* ---------- routes ---------- */
+const { geoCountryGeoip } = require("./middleware/geoCountryGeoip");
+
+app.use("/api/auth", authRoutes);
+app.use("/api/user", userRoutes);
+app.use("/api/form", formRoutes);
+app.use("/api/product-media", productMediaRoutes);
+app.use("/api/templates", templateRoutes);
+app.use("/api/memberships", memberShipRoutes);
+app.use("/api/membership", require("./routes/membershipCheckoutRoutes"));
+app.use("/api/coupons", require("./routes/couponAdminRoutes"));
+
+app.use("/api/geo", geoRoutes);
+app.use(
+  "/api/membership",
+  geoCountryGeoip,
+  require("./routes/membershipPayRoutes")
+);
+
+// admin routes //
+app.use("/api/admin-users", adminAuthRoutes);
+
+/* ---------- errors ---------- */
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).send({ message: "Something went wrong!" });
+});
 
 // mongoose.connect(url, { useNewUrlParser: true });
-
-//swagger
-// const options = {
-//   swaggerDefinition,
-//   apis: ["./swagger/*.js"],
-// };
-
-// const swaggerSpec = swaggerJSDoc(options);
-// app.get("/swagger.json", function (req, res) {
-//   res.setHeader("Content-Type", "application/json");
-//   res.send(swaggerSpec);
-// });
-
-// app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // const con = mongoose.connection;
 
 // con.on("open", () => {
 //   console.log("Connected...");
 // });
-
-//Routes
-// app.use("/", routes(router));
-// app.use(passport.initialize());
-// app.use(passport.session());
-
-// error handler
-app.use((error, req, res, next) => {
-  if (!error) {
-    return next();
-  }
-  console.log(error);
-  res.status(error.status || 500).send({
-    status: error.status || 500,
-    error: error.message || error,
-    data: error.data || "",
-  });
-});
 
 app.listen(3000, () => {
   console.log("Server started");
