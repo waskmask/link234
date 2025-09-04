@@ -6,8 +6,10 @@ const cors = require("cors");
 const path = require("path");
 const passport = require("passport");
 const configurePassport = require("./config/passport");
-const { connectDB, disconnectDB } = require("./config/db");
+// const { connectDB, disconnectDB } = require("./config/db");
 const cookieParser = require("cookie-parser");
+const mongoose = require("mongoose");
+const url = process.env.MONGO_URI;
 
 // routes
 const authRoutes = require("./routes/authRoutes");
@@ -123,40 +125,14 @@ app.use((err, req, res, next) => {
   res.status(500).send({ message: "Something went wrong!" });
 });
 
-/* ---------- start ---------- */
-const DEFAULT_PORT = Number(process.env.PORT) || 3000;
+mongoose.connect(url);
 
-async function start(port = DEFAULT_PORT) {
-  // Start server immediately so Passenger sees a bound port
-  const server = app.listen(port, () => {
-    console.log(`🚀 Server listening on ${port} (pid ${process.pid})`);
-  });
+const con = mongoose.connection;
 
-  // Try DB connection in background (won’t block startup)
-  connectDB()
-    .then(() => console.log("✅ DB connected"))
-    .catch((err) => console.error("❌ DB connect error:", err?.message || err));
+con.on("open", () => {
+  console.log("Connected...");
+});
 
-  server.on("error", (err) => {
-    if (err.code === "EADDRINUSE") {
-      console.warn(`⚠️ Port ${port} in use, trying ${port + 1}...`);
-      setTimeout(() => start(port + 1), 250);
-    } else {
-      console.error("Server error:", err);
-      process.exit(1);
-    }
-  });
-
-  const stop = () =>
-    server.close(async () => {
-      try {
-        await disconnectDB?.();
-      } finally {
-        process.exit(0);
-      }
-    });
-
-  process.on("SIGINT", stop);
-  process.on("SIGTERM", stop);
-}
-if (require.main === module) start();
+app.listen(3000, () => {
+  console.log("Server started");
+});
