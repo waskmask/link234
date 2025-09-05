@@ -110,6 +110,36 @@ const MembershipSnapshotSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const MembershipHistorySchema = new mongoose.Schema(
+  {
+    purchase: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "MembershipPurchase",
+    },
+    provider: {
+      type: String,
+      enum: ["stripe", "razorpay", "manual", "other"],
+      required: true,
+    },
+    transactionId: { type: String }, // Stripe: payment_intent  | Razorpay: payment_id
+    receiptUrl: { type: String, default: "" }, // optional (Stripe charge receipt_url)
+    plan: { type: mongoose.Schema.Types.ObjectId, ref: "MembershipPlan" },
+    planKey: { type: String },
+    planName: { type: String },
+    region: { type: String, enum: ["IN", "EU", "INTL"] },
+    currency: { type: String },
+    baseAmountMinor: { type: Number, default: 0 },
+    discountMinor: { type: Number, default: 0 },
+    finalAmountMinor: { type: Number, default: 0 },
+    couponCode: { type: String, uppercase: true, trim: true, default: "" },
+    durationDays: { type: Number, default: 0 },
+    periodStart: { type: Date },
+    periodEnd: { type: Date },
+    purchasedAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   emailVisibility: { type: Boolean, default: false },
@@ -183,6 +213,7 @@ const userSchema = new mongoose.Schema({
     type: MembershipSnapshotSchema,
     default: () => ({ status: "inactive" }),
   },
+  membershipHistory: { type: [MembershipHistorySchema], default: [] },
   referralCode: {
     type: String,
     default: () => nanoid("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", 8),

@@ -1,7 +1,7 @@
-// apis/utils/membership.js
+// ./utils/membership.js
 const MembershipPlan = require("../models/MembershipPlan");
 const User = require("../models/User");
-console.log("[applyPaidPurchaseToUser] module loaded");
+
 function addDays(date, days) {
   const d = new Date(date);
   d.setDate(d.getDate() + Number(days || 0));
@@ -58,6 +58,7 @@ exports.applyPaidPurchaseToUser = async function applyPaidPurchaseToUser(
     currentPeriodStart: now,
     currentPeriodEnd: addDays(anchor, purchase.durationDays || 0),
     status: "active",
+    updatedAt: now,
   };
 
   const result = await User.updateOne(

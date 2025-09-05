@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Membership Purchase Successful</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+      body {
+        margin: 0;
+        background: #f6f8fb;
+        font-family: Inter, Arial, Helvetica, sans-serif;
+        color: #111;
+      }
+      .wrap {
+        max-width: 640px;
+        margin: 0 auto;
+        padding: 32px 16px;
+      }
+      .card {
+        background: #fff;
+        border-radius: 16px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+      }
+      .hdr {
+        padding: 20px 24px;
+        border-bottom: 1px solid #eef1f5;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .hdr img {
+        height: 28px;
+      }
+      .hdr .brand {
+        font-weight: 700;
+        font-size: 16px;
+      }
+      .content {
+        padding: 28px 24px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 20px;
+      }
+      p {
+        margin: 0 0 12px;
+        line-height: 1.55;
+      }
+      .summary {
+        margin: 16px 0;
+        padding: 12px;
+        background: #f8fafc;
+        border: 1px solid #eef1f5;
+        border-radius: 12px;
+      }
+      .row {
+        display: flex;
+        justify-content: space-between;
+        margin: 6px 0;
+      }
+      .label {
+        color: #555;
+        padding-right: 8px;
+        margin-right: 8px;
+      }
+      .value {
+        font-weight: 600;
+      }
+      .cta {
+        margin-top: 20px;
+      }
+      .btn {
+        display: inline-block;
+        background: #111;
+        color: #fff;
+        text-decoration: none;
+        padding: 12px 16px;
+        border-radius: 10px;
+      }
+      .foot {
+        padding: 16px 24px;
+        border-top: 1px solid #eef1f5;
+        color: #666;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <div class="hdr">
+          <img src="{{BRAND_LOGO_URL}}" alt="{{BRAND_NAME}}" />
+          <div class="brand">{{BRAND_NAME}}</div>
+        </div>
+        <div class="content">
+          <h1>Payment Successful 🎉</h1>
+          <p>
+            Hi {{USER_NAME}}, thank you for purchasing
+            <strong>{{PLAN_NAME}}</strong>.
+          </p>
+
+          <div class="summary">
+            <div class="row">
+              <div class="label">Transaction ID:</div>
+              <div class="value">{{TRANSACTION_ID}}</div>
+            </div>
+            <div class="row">
+              <div class="label">Provider:</div>
+              <div class="value">{{PROVIDER}}</div>
+            </div>
+            <div class="row">
+              <div class="label">Region:</div>
+              <div class="value">{{REGION}}</div>
+            </div>
+            <div class="row">
+              <div class="label">Amount:</div>
+              <div class="value">{{TOTAL_FORMATTED}}</div>
+            </div>
+            <div class="row">
+              <div class="label">Base:</div>
+              <div class="value">{{BASE_FORMATTED}}</div>
+            </div>
+            <div class="row">
+              <div class="label">Discount:</div>
+              <div class="value">{{DISCOUNT_FORMATTED}}</div>
+            </div>
+            <div class="row">
+              <div class="label">: Duration</div>
+              <div class="value">{{DURATION_DAYS}} days</div>
+            </div>
+            <div class="row">
+              <div class="label">Active Until</div>
+              <div class="value">{{PERIOD_END}}</div>
+            </div>
+          </div>
+
+          <p>
+            You can now enjoy all premium features. If you need an invoice or a
+            refund, please contact customer support {{SUPPORT_EMAIL}}.
+          </p>
+
+          <div class="cta">
+            <a class="btn" href="{{DASHBOARD_URL}}">Go to Dashboard</a>
+          </div>
+        </div>
+        <div class="foot">
+          Need help? Contact us at
+          <a href="mailto:{{SUPPORT_EMAIL}}">{{SUPPORT_EMAIL}}</a>.
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

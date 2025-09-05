@@ -6,6 +6,7 @@ const MembershipPurchase = require("../models/MembershipPurchase");
 const Coupon = require("../models/Coupon");
 const User = require("../models/User");
 const { applyPaidPurchaseToUser } = require("../utils/membership");
+const { snapshotAndNotify } = require("../utils/membershipHistory");
 
 // Simple in-memory de-dupe (optionally move to Mongo collection if needed)
 const seenEvents = new Set();
@@ -90,6 +91,13 @@ router.post("/", express.raw({ type: "*/*" }), async (req, res) => {
         "[RAZORPAY] Updated user membership:",
         updatedUser.membership
       );
+
+      // Push history + send email
+      await snapshotAndNotify({
+        purchaseId: p._id,
+        transactionId: p.providerRef, // Razorpay payment_id
+        receiptUrl: "", // usually none from Razorpay
+      });
     }
 
     // Optional: log failures

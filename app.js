@@ -31,8 +31,13 @@ app.get("/api/health", (req, res) =>
 );
 
 /* ---------- proxy & cookies ---------- */
-app.set("trust proxy", 1); // HTTPS behind nginx/plesk
+app.set("trust proxy", true); // HTTPS behind nginx/plesk
+
 app.use(cookieParser());
+
+app.set("trust proxy", true);
+const { geoCountryGeoip } = require("./middleware/geoCountryGeoip");
+app.use(geoCountryGeoip);
 
 /* ---------- CORS (env-driven) ---------- */
 const allowList = (process.env.API_URL_FRONT || "")
@@ -137,7 +142,6 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/public", express.static(path.join(__dirname, "public")));
 
 /* ---------- routes ---------- */
-const { geoCountryGeoip } = require("./middleware/geoCountryGeoip");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
@@ -149,11 +153,7 @@ app.use("/api/membership", require("./routes/membershipCheckoutRoutes"));
 app.use("/api/coupons", require("./routes/couponAdminRoutes"));
 
 app.use("/api/geo", geoRoutes);
-app.use(
-  "/api/membership",
-  geoCountryGeoip,
-  require("./routes/membershipPayRoutes")
-);
+app.use("/api/membership", require("./routes/membershipPayRoutes"));
 
 // admin routes //
 app.use("/api/admin-users", adminAuthRoutes);

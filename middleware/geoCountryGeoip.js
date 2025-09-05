@@ -93,7 +93,7 @@ function parseAcceptLanguageList(header = "") {
 
 function geoCountryGeoip(req, _res, next) {
   // Dev override: /?country=DE
-  if (req.query.country) {
+  if (process.env.NODE_ENV !== "production" && req.query.country) {
     const cc = String(req.query.country).toUpperCase();
     req.geo = { countryCode: cc, region: resolveRegionFromCountry(cc) };
     return next();

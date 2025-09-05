@@ -3,6 +3,7 @@ const getStripe = require("../utils/stripeClient");
 const MembershipPurchase = require("../models/MembershipPurchase");
 const Coupon = require("../models/Coupon");
 const { applyPaidPurchaseToUser } = require("../utils/membership");
+const { snapshotAndNotify } = require("../utils/membershipHistory");
 
 module.exports = async function webhookStripeHandler(req, res) {
   const stripe = getStripe();
@@ -39,7 +40,7 @@ module.exports = async function webhookStripeHandler(req, res) {
       if (!p.paid) {
         p.paid = true;
         p.provider = "stripe";
-        p.providerRef = s.id;
+        p.providerRef = s.payment_intent || s.id;
         if (s.currency) p.currency = String(s.currency).toUpperCase();
         if (typeof s.amount_total === "number")
           p.finalAmountMinor = s.amount_total;
@@ -53,6 +54,13 @@ module.exports = async function webhookStripeHandler(req, res) {
             { $inc: { "stats.totalRedemptions": 1 } }
           );
         }
+
+        // Push history + send email (non-breaking)
+        await snapshotAndNotify({
+          purchaseId: p._id,
+          transactionId: p.providerRef, // already PI if present
+          receiptUrl: "", // (optional) can fetch charge for a receipt if you like
+        });
       }
     }
 
