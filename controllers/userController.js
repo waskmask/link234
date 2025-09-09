@@ -67,7 +67,7 @@ exports.editUsername = async (req, res) => {
     }
 
     // Generate new QR codes with the updated username
-    const userProfileUrl = `https://yourdomain.com/user-profile/${user.username}`;
+    const userProfileUrl = `https://link234.com/${user.username}`;
 
     // Generate and save the PNG QR code
     const pngQRCode = qr.image(userProfileUrl, { type: "png" });
