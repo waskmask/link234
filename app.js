@@ -40,7 +40,7 @@ const { geoCountryGeoip } = require("./middleware/geoCountryGeoip");
 app.use(geoCountryGeoip);
 
 /* ---------- CORS (env-driven) ---------- */
-const allowList = (process.env.API_URL_FRONT || "")
+const allowList = (process.env.API_URL_WHITELIST || "")
   .split(",")
   .map((s) => s.trim().replace(/\/+$/, ""))
   .filter(Boolean);
