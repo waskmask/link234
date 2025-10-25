@@ -105,4 +105,63 @@ router.post("/validate", async (req, res) => {
   }
 });
 
+// List coupons with pagination, optional search and filters
+router.get(
+  "/",
+  verifyAdminToken,
+  allowAdminRoles("superadmin", "admin", "sales", "moderator"),
+  async (req, res) => {
+    try {
+      // query params
+      const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+      const limit = Math.min(
+        Math.max(parseInt(req.query.limit, 10) || 20, 1),
+        200
+      );
+      const q = (req.query.q || "").trim();
+      const sort = (req.query.sort || "-createdAt").trim(); // e.g. "code" or "-createdAt"
+      const isActiveParam = req.query.isActive;
+
+      // build filter
+      const filter = {};
+      if (q) {
+        filter.$or = [
+          { code: { $regex: q, $options: "i" } },
+          { name: { $regex: q, $options: "i" } }, // if you have a name/label
+          { description: { $regex: q, $options: "i" } }, // if you store description
+        ];
+      }
+      if (typeof isActiveParam !== "undefined") {
+        // accepts "true"/"false" or boolean
+        filter.isActive = String(isActiveParam).toLowerCase() === "true";
+      }
+
+      const skip = (page - 1) * limit;
+
+      // query
+      const [items, total] = await Promise.all([
+        Coupon.find(filter)
+          .sort(sort) // "-createdAt" newest first
+          .skip(skip)
+          .limit(limit)
+          .lean(),
+        Coupon.countDocuments(filter),
+      ]);
+
+      const pages = Math.max(Math.ceil(total / limit), 1);
+
+      return res.json({
+        page,
+        pages,
+        limit,
+        total,
+        items,
+      });
+    } catch (e) {
+      console.error("List coupons error:", e);
+      return res.status(500).json({ message: "Failed to fetch coupons." });
+    }
+  }
+);
+
 module.exports = router;

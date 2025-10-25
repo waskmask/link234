@@ -18,10 +18,17 @@ const formRoutes = require("./routes/formRoutes");
 const productMediaRoutes = require("./routes/productMediaRoutes");
 const templateRoutes = require("./routes/templateRoutes");
 const memberShipRoutes = require("./routes/membershipRoutes");
+
 const adminAuthRoutes = require("./routes/adminAuthRoutes");
+const adminMembershipRoutes = require("./routes/adminMembershipRoutes");
+const adminAppUserRoutes = require("./routes/adminAppUsersRoutes");
+const adminDashboardRoutes = require("./routes/adminDashboardRoutes");
+
 const geoRoutes = require("./routes/geoRoutes");
 
 var app = express();
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 app.get("/api/health", (req, res) =>
   res.status(200).json({
@@ -92,6 +99,7 @@ app.use((req, res, next) => {
 
 /* ---------- Stripe webhook (raw) BEFORE body parsers ---------- */
 const webhookStripeHandler = require("./routes/webhookStripe");
+const { log } = require("console");
 app.post(
   "/api/stripe/webhook",
   express.raw({ type: "application/json" }),
@@ -157,6 +165,9 @@ app.use("/api/membership", require("./routes/membershipPayRoutes"));
 
 // admin routes //
 app.use("/api/admin-users", adminAuthRoutes);
+app.use("/api", adminMembershipRoutes);
+app.use("/api/admin", adminAppUserRoutes);
+app.use("/api/admin", adminDashboardRoutes);
 
 /* ---------- errors ---------- */
 app.use((err, req, res, next) => {

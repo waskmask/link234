@@ -84,3 +84,170 @@ exports.changePassword = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+exports.me = async (req, res) => {
+  const admin = await AdminUser.findById(req.admin.id).select(
+    "_id name email role isActive lastLoginAt createdAt"
+  );
+  if (!admin) return res.status(404).json({ message: "not_found" });
+  res.json({ admin });
+};
+
+exports.toggleActive = async (req, res) => {
+  try {
+    const targetId = req.params.id;
+    const { isActive } = req.body;
+
+    if (typeof isActive !== "boolean") {
+      return res.status(400).json({ message: "isActive must be boolean" });
+    }
+
+    if (targetId === req.admin.id) {
+      return res
+        .status(400)
+        .json({ message: "You cannot toggle your own active status" });
+    }
+
+    const target = await AdminUser.findById(targetId);
+    if (!target) return res.status(404).json({ message: "Admin not found" });
+
+    target.isActive = isActive;
+    await target.save();
+
+    res.json({
+      message: `Admin ${target.email} is now ${
+        isActive ? "active" : "inactive"
+      }`,
+      admin: {
+        _id: target._id,
+        name: target.name,
+        email: target.email,
+        role: target.role,
+        isActive: target.isActive,
+        updatedAt: target.updatedAt,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+/**
+ * Change own password (must provide old password).
+ * Body: { oldPassword: string, newPassword: string }
+ */
+exports.changeOwnPassword = async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body || {};
+    if (!oldPassword || !newPassword) {
+      return res
+        .status(400)
+        .json({ message: "oldPassword and newPassword required" });
+    }
+
+    const admin = await AdminUser.findById(req.admin.id).select("+password");
+    if (!admin) return res.status(404).json({ message: "Admin not found" });
+
+    const ok = await admin.comparePassword(oldPassword);
+    if (!ok) return res.status(400).json({ message: "Old password incorrect" });
+
+    // (Optional) add your own strength checks here
+    admin.password = newPassword;
+    await admin.save();
+    res.json({ message: "Password changed successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+/**
+ * Change another admin's password (Admin or Super Admin).
+ * - Cannot target self here; use change-own-password route for that.
+ * Body: { newPassword: string }
+ */
+exports.changeOtherPassword = async (req, res) => {
+  try {
+    const targetId = req.params.id;
+    const { newPassword } = req.body || {};
+
+    if (!newPassword) {
+      return res.status(400).json({ message: "newPassword required" });
+    }
+
+    if (targetId === req.admin.id) {
+      return res
+        .status(400)
+        .json({ message: "Use /change-own-password to change your password" });
+    }
+
+    const target = await AdminUser.findById(targetId).select("+password");
+    if (!target) return res.status(404).json({ message: "Admin not found" });
+
+    target.password = newPassword;
+    await target.save();
+
+    res.json({ message: `Password updated for ${target.email}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+const SAFE_SELECT = "_id name email role isActive createdAt updatedAt";
+
+exports.listAdmins = async (req, res) => {
+  try {
+    const page = Math.max(parseInt(req.query.page ?? "1", 10), 1);
+    const limit = Math.min(
+      Math.max(parseInt(req.query.limit ?? "20", 10), 1),
+      100
+    );
+    const q = (req.query.q || "").trim();
+    const role = (req.query.role || "").trim().toLowerCase(); // optional filter
+    const status = (req.query.status || "").trim().toLowerCase(); // "active" | "inactive"
+
+    const filter = {};
+    if (q) {
+      filter.$or = [
+        { name: { $regex: q, $options: "i" } },
+        { email: { $regex: q, $options: "i" } },
+      ];
+    }
+    if (role) {
+      filter.role = role; // e.g., "admin" | "superadmin"
+    }
+    if (status === "active") filter.isActive = true;
+    if (status === "inactive") filter.isActive = false;
+
+    const [items, total] = await Promise.all([
+      AdminUser.find(filter)
+        .select(SAFE_SELECT)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      AdminUser.countDocuments(filter),
+    ]);
+
+    res.json({
+      items,
+      page,
+      limit,
+      total,
+    });
+  } catch (err) {
+    console.error("[GET /admins] error:", err);
+    res.status(500).json({ message: "failed_to_list_admins" });
+  }
+};
+
+exports.getAdminById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const admin = await AdminUser.findById(id).select(SAFE_SELECT).lean();
+    if (!admin) return res.status(404).json({ message: "not_found" });
+    res.json({ admin });
+  } catch (err) {
+    console.error("[GET /admins/:id] error:", err);
+    res.status(500).json({ message: "failed_to_get_admin" });
+  }
+};
