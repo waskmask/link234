@@ -1,17 +1,16 @@
-const express = require("express");
-const session = require("express-session");
-const router = express.Router();
-require("dotenv").config();
-const cors = require("cors");
-const path = require("path");
-const passport = require("passport");
-const configurePassport = require("./config/passport");
-// const { connectDB, disconnectDB } = require("./config/db");
-const cookieParser = require("cookie-parser");
-const mongoose = require("mongoose");
-const url = process.env.MONGO_URI;
+// server.js (Link234 API) — cleaned + CORS-fixed
 
-// routes
+require("dotenv").config();
+
+const express = require("express");
+const path = require("path");
+const cors = require("cors");
+const cookieParser = require("cookie-parser");
+const session = require("express-session");
+const passport = require("passport");
+const mongoose = require("mongoose");
+
+// --- Routes (as in your current project) ---
 const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
 const formRoutes = require("./routes/formRoutes");
@@ -25,133 +24,105 @@ const adminAppUserRoutes = require("./routes/adminAppUsersRoutes");
 const adminDashboardRoutes = require("./routes/adminDashboardRoutes");
 
 const geoRoutes = require("./routes/geoRoutes");
+const webhookStripeHandler = require("./routes/webhookStripe");
+const configurePassport = require("./config/passport");
+const { geoCountryGeoip } = require("./middleware/geoCountryGeoip");
 
-var app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// --- Setup ---
+const app = express();
+app.set("trust proxy", 1); // behind nginx/Passenger/Plesk
 
+// ---------- HEALTH ----------
 app.get("/api/health", (req, res) =>
-  res.status(200).json({
-    ok: true,
-    pid: process.pid,
-  })
+  res.status(200).json({ ok: true, pid: process.pid })
+);
+app.get("/health", (req, res) =>
+  res.status(200).json({ ok: true, pid: process.pid })
 );
 
-/* ---------- proxy & cookies ---------- */
-app.set("trust proxy", true); // HTTPS behind nginx/plesk
-
-app.use(cookieParser());
-
-app.set("trust proxy", true);
-const { geoCountryGeoip } = require("./middleware/geoCountryGeoip");
-app.use(geoCountryGeoip);
-
-/* ---------- CORS (env-driven) ---------- */
-const allowList = (process.env.API_URL_WHITELIST || "")
-  .split(",")
-  .map((s) => s.trim().replace(/\/+$/, ""))
-  .filter(Boolean);
-
-function corsOrigin(origin, cb) {
-  if (!origin) return cb(null, true); // curl/postman
-  return cb(null, allowList.includes(origin)); // strict allowlist
-}
-
-const corsOptions = {
-  origin: corsOrigin,
-  credentials: true, // let browser send cookies
-};
-
-// Preflight short-circuit so OPTIONS never 500/504
-app.use((req, res, next) => {
-  if (req.method !== "OPTIONS") return next();
-
-  const origin = req.headers.origin;
-  const allowed = origin && allowList.includes(origin);
-
-  if (allowed) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-    // reflect what the browser asked for:
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      req.headers["access-control-request-headers"] || ""
-    );
-    res.setHeader(
-      "Access-Control-Allow-Methods",
-      req.headers["access-control-request-method"] ||
-        "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-    );
-    res.setHeader("Access-Control-Max-Age", "86400");
-  }
-  return res.sendStatus(204);
-});
-
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
-app.use((req, res, next) => {
-  console.log(
-    `Request Origin: ${req.headers.origin} | Path: ${req.path} | Method: ${req.method}`
-  );
-  next();
-});
-
-/* ---------- Stripe webhook (raw) BEFORE body parsers ---------- */
-const webhookStripeHandler = require("./routes/webhookStripe");
-const { log } = require("console");
+// ---------- STRIPE WEBHOOK (RAW) BEFORE ANY JSON PARSER ----------
 app.post(
   "/api/stripe/webhook",
   express.raw({ type: "application/json" }),
   webhookStripeHandler
 );
 
-/* ---------- other webhooks ---------- */
-app.use("/api/razorpay/webhook", require("./routes/webhookRazorpay"));
+// ---------- COOKIES, GEO ----------
+app.use(cookieParser());
+app.use(geoCountryGeoip);
 
+// ---------- BODY PARSERS (ONCE) ----------
+app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
 
-/* ---------- sessions ---------- */
-const sessionSecret = (process.env.SESSION_SECRET || "").trim();
-if (!sessionSecret)
-  console.warn("⚠️  SESSION_SECRET missing; using a dev fallback.");
+// ---------- CORS (env-driven allowlist) ----------
+const allowList = (process.env.API_URL_WHITELIST || "")
+  .split(",")
+  .map((s) => s.trim().replace(/\/+$/, ""))
+  .filter(Boolean);
 
+const corsOptions = {
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true); // e.g., curl/Postman
+    return cb(null, allowList.includes(origin));
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  // Let cors reflect Access-Control-Request-Headers automatically
+  maxAge: 86400,
+};
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
+
+// (Optional) request log for debugging
+app.use((req, res, next) => {
+  console.log(
+    `Origin=${req.headers.origin || "-"} | ${req.method} ${req.path}`
+  );
+  next();
+});
+
+// ---------- SESSIONS ----------
 const isProd = process.env.NODE_ENV === "production";
+const sessionSecret = (process.env.SESSION_SECRET || "").trim();
+if (!sessionSecret) {
+  console.warn("⚠️  SESSION_SECRET missing; using a dev fallback.");
+}
 const cookieDomain =
-  (process.env.FRONT_COOKIE_DOMAIN || "").trim() || undefined;
-const crossSite = String(process.env.CROSS_SITE).toLowerCase() === "true";
+  (process.env.FRONT_COOKIE_DOMAIN || "").trim() || undefined; // e.g. .link234.com
+const crossSite = String(process.env.CROSS_SITE || "").toLowerCase() === "true";
 
 app.use(
   session({
     secret: sessionSecret || "dev-secret-change-me",
     resave: false,
     saveUninitialized: false,
-    proxy: true, // needed when TLS terminates at proxy
+    proxy: true,
     cookie: {
       httpOnly: true,
       sameSite: crossSite ? "none" : "lax",
-      secure: isProd, // must be true on HTTPS
-      domain: cookieDomain, // e.g. .link234.com
+      secure: isProd,
+      domain: cookieDomain,
       maxAge: 24 * 60 * 60 * 1000,
     },
   })
 );
 
-/* ---------- passport ---------- */
+// ---------- PASSPORT ----------
 configurePassport(passport);
 app.use(passport.initialize());
 app.use(passport.session());
 
-/* ---------- static ---------- */
+// ---------- STATIC ----------
 app.use("/qrcodes", express.static(path.join(__dirname, "qrcodes")));
 app.use("/catalogues", express.static(path.join(__dirname, "catalogues")));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/public", express.static(path.join(__dirname, "public")));
 
-/* ---------- routes ---------- */
-
+// ---------- ROUTES ----------
 app.use("/api/auth", authRoutes);
+app.use("/auth", authRoutes); // alias so /auth/login works if frontend calls that
+
 app.use("/api/user", userRoutes);
 app.use("/api/form", formRoutes);
 app.use("/api/product-media", productMediaRoutes);
@@ -163,26 +134,34 @@ app.use("/api/coupons", require("./routes/couponAdminRoutes"));
 app.use("/api/geo", geoRoutes);
 app.use("/api/membership", require("./routes/membershipPayRoutes"));
 
-// admin routes //
+// webhooks (others) — these typically use JSON, so AFTER parsers is fine
+app.use("/api/razorpay/webhook", require("./routes/webhookRazorpay"));
+
+// admin routes
 app.use("/api/admin-users", adminAuthRoutes);
 app.use("/api", adminMembershipRoutes);
 app.use("/api/admin", adminAppUserRoutes);
 app.use("/api/admin", adminDashboardRoutes);
 
-/* ---------- errors ---------- */
+// ---------- ERRORS ----------
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).send({ message: "Something went wrong!" });
+  console.error("[UNHANDLED ERROR]", err);
+  // Ensure CORS headers are present on errors too:
+  // (cors middleware already ran; just reply JSON)
+  res.status(500).json({ message: "Something went wrong!" });
 });
 
-mongoose.connect(url);
+// ---------- DB + START ----------
+const mongoUri = process.env.MONGO_URI;
+mongoose
+  .connect(mongoUri, { autoIndex: false })
+  .then(() => console.log("MongoDB connected"))
+  .catch((err) => {
+    console.error("MongoDB connection error:", err);
+    process.exit(1);
+  });
 
-const con = mongoose.connection;
-
-con.on("open", () => {
-  console.log("Connected...");
-});
-
-app.listen(3000, () => {
-  console.log("Server started");
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server started on :${PORT}`);
 });
