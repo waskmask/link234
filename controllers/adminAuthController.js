@@ -3,7 +3,7 @@ const { AdminUser } = require("../models/AdminUser");
 const jwt = require("jsonwebtoken");
 
 const isProd = process.env.NODE_ENV === "production";
-const CROSS_SITE = process.env.CROSS_SITE === "true";
+const CROSS_SITE = String(process.env.CROSS_SITE).toLowerCase() === "true";
 
 const cookieOpts = () => ({
   httpOnly: true,
@@ -11,6 +11,7 @@ const cookieOpts = () => ({
   sameSite: CROSS_SITE ? "none" : "lax",
   path: "/",
   maxAge: 24 * 60 * 60 * 1000,
+  domain: process.env.FRONT_COOKIE_DOMAIN || undefined,
 });
 
 const generateAdminToken = (admin) =>
@@ -49,6 +50,13 @@ exports.login = async (req, res) => {
 
     const token = generateAdminToken(admin);
     res.cookie("adminToken", token, cookieOpts());
+
+    // ---- CRITICAL: manually set CORS headers on this response ----
+    const origin = req.headers.origin;
+    if (allowList.includes(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin); // exact origin
+    }
+    res.setHeader("Access-Control-Allow-Credentials", "true");
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -56,16 +64,26 @@ exports.login = async (req, res) => {
 };
 
 exports.logout = async (req, res) => {
-  try {
-    const base = { ...cookieOpts(), maxAge: 0 };
-    res.clearCookie("adminToken", base);
-    res.clearCookie("adminToken", { ...base, domain: undefined });
-    res.clearCookie("adminToken", { ...base, path: req.baseUrl || "/" });
-    res.setHeader("Cache-Control", "no-store");
-    res.json({ success: true });
-  } catch {
-    res.json({ success: true });
+  const base = cookieOpts({ maxAge: 0 });
+
+  // Clear on exact origin
+  res.clearCookie("adminToken", base);
+
+  // Also clear on shared parent (in case it was set there)
+  if (process.env.FRONT_COOKIE_DOMAIN) {
+    res.clearCookie("adminToken", {
+      ...base,
+      domain: process.env.FRONT_COOKIE_DOMAIN,
+    });
   }
+
+  const origin = req.headers.origin;
+  if (allowList.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+
+  res.json({ success: true });
 };
 
 exports.changePassword = async (req, res) => {

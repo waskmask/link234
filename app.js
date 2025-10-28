@@ -62,15 +62,24 @@ const allowList = (process.env.API_URL_WHITELIST || "")
   .filter(Boolean);
 
 const corsOptions = {
-  origin: (origin, cb) => {
-    if (!origin) return cb(null, true); // e.g., curl/Postman
-    return cb(null, allowList.includes(origin));
+  origin: (origin, callback) => {
+    // Allow tools without origin (Postman, curl, server-side)
+    if (!origin) return callback(null, true);
+
+    // Exact match required for credentials
+    if (allowList.includes(origin)) {
+      return callback(null, origin); // <-- return the origin string
+    }
+
+    // Not whitelisted → reject
+    return callback(new Error("Not allowed by CORS"));
   },
-  credentials: true,
+  credentials: true, // <-- MUST be true
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  // Let cors reflect Access-Control-Request-Headers automatically
+  allowedHeaders: ["Content-Type", "Authorization"],
   maxAge: 86400,
 };
+
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
