@@ -5,6 +5,11 @@ const jwt = require("jsonwebtoken");
 const isProd = process.env.NODE_ENV === "production";
 const CROSS_SITE = String(process.env.CROSS_SITE).toLowerCase() === "true";
 
+const allowList = (process.env.API_URL_WHITELIST || "")
+  .split(",")
+  .map((s) => s.trim().replace(/\/+$/, ""))
+  .filter(Boolean);
+
 const cookieOpts = () => ({
   httpOnly: true,
   secure: isProd,
